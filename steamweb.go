@@ -7,6 +7,7 @@ package steamauth
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -29,9 +30,21 @@ type steamWeb struct {
 // SteamWeb returns a convenient chainable steamWeb object that allows
 // you to perform requests against the steam API with a simple sequence
 // of method calls.
-func SteamWeb() *steamWeb {
+func SteamWeb(proxyStr string) *steamWeb {
+	transport := http.Transport{}
+
+	if len(proxyStr) > 0 {
+		if proxyUrl, er := url.Parse(proxyStr); er == nil {
+			transport.Proxy = http.ProxyURL(proxyUrl)
+		} else {
+			fmt.Println(er)
+		}
+	}
+
 	return &steamWeb{
-		Client: &http.Client{},
+		Client: &http.Client{
+			Transport: &transport,
+		},
 		headers: http.Header{
 			"User-Agent": []string{"Mozilla/5.0 (Linux; U; Android 4.1.1; en-us; Google Nexus 4 - 4.1.1 - API 16 - 768x1280 Build/JRO03S) AppleWebKit/534.30 (KHTML, like Gecko) Version/4.0 Mobile Safari/534.30"},
 			"Accept":     []string{"text/javascript, text/html, application/xml, text/xml, */*"},

@@ -24,13 +24,14 @@ type AuthenticatorLinker struct {
 
 	session   *SessionData
 	cookieJar *cookiejar.Jar
+	proxyUrl string
 }
 
 // NewAuthenticatorLinker will create an account linker
 //
 // Pass it the SessionData from a logged in instance of
 // a UserLogin structure.
-func NewAuthenticatorLinker(session *SessionData) *AuthenticatorLinker {
+func NewAuthenticatorLinker(session *SessionData, proxyUrl string) *AuthenticatorLinker {
 	cookieJar, _ := cookiejar.New(&cookiejar.Options{})
 
 	session.SetCookies(cookieJar)
@@ -39,6 +40,7 @@ func NewAuthenticatorLinker(session *SessionData) *AuthenticatorLinker {
 		session:   session,
 		DeviceID:  generateDeviceID(),
 		cookieJar: cookieJar,
+		proxyUrl: proxyUrl,
 	}
 }
 
@@ -78,7 +80,7 @@ func (al *AuthenticatorLinker) AddAuthenticator() (LinkResult, error) {
 	logf("Attempting add authenticator for device %s", al.DeviceID)
 
 	addAuthenticatorResponse := AddAuthenticatorResponse{}
-	_, err := SteamWeb().
+	_, err := SteamWeb(al.proxyUrl).
 		SetParams(postData).
 		Post(APIEndpoints.SteamAPIBase.String() + "/ITwoFactorService/AddAuthenticator/v0001").
 		HandleJSON(&addAuthenticatorResponse).
@@ -119,8 +121,8 @@ func (al *AuthenticatorLinker) FinalizeAddAuthenticator(smsCode string) (Finaliz
 	}
 
 	for tries := 0; tries <= 30; {
-		postData.Set("authenticator_code", iif(tries == 0, "", al.LinkedAccount.GenerateSteamGuardCode()))
-		postData.Set("authenticator_time", strconv.FormatInt(TimeAligner.GetSteamTime().Unix(), 10))
+		postData.Set("authenticator_code", iif(tries == 0, "", al.LinkedAccount.GenerateSteamGuardCode(al.proxyUrl)))
+		postData.Set("authenticator_time", strconv.FormatInt(TimeAligner.GetSteamTime(al.proxyUrl).Unix(), 10))
 
 		if smsCodeGood {
 			postData.Set("activation_code", "")
@@ -129,7 +131,7 @@ func (al *AuthenticatorLinker) FinalizeAddAuthenticator(smsCode string) (Finaliz
 		logf("Attempting finalize authentication, attempt %d of 30", tries+1)
 
 		finalizeResponse := FinalizeAuthenticatorResponse{}
-		_, err := SteamWeb().
+		_, err := SteamWeb(al.proxyUrl).
 			Post(APIEndpoints.SteamAPIBase.String() + "/ITwoFactorService/FinalizeAddAuthenticator/v0001").
 			SetParams(postData).
 			HandleJSON(&finalizeResponse).
@@ -173,7 +175,7 @@ func (al *AuthenticatorLinker) FinalizeAddAuthenticator(smsCode string) (Finaliz
 func (al *AuthenticatorLinker) addPhoneNumber() bool {
 	logf("Add phone number %s", al.PhoneNumber)
 	addPhoneResponse := AddPhoneResponse{}
-	_, err := SteamWeb().
+	_, err := SteamWeb(al.proxyUrl).
 		SetJar(al.cookieJar).
 		Get(APIEndpoints.CommunityBase.String() + "/steamguard/phoneajax?op=add_phone_number&arg=" + url.QueryEscape(al.PhoneNumber)).
 		HandleJSON(&addPhoneResponse).
@@ -190,7 +192,7 @@ func (al *AuthenticatorLinker) addPhoneNumber() bool {
 func (al *AuthenticatorLinker) hasPhoneAttached() bool {
 	logf("has phone attached?")
 	hasPhoneResponse := HasPhoneResponse{}
-	_, err := SteamWeb().
+	_, err := SteamWeb(al.proxyUrl).
 		SetJar(al.cookieJar).
 		Get(APIEndpoints.CommunityBase.String() + "/steamguard/phoneajax?op=has_phone&arg=").
 		HandleJSON(hasPhoneResponse).

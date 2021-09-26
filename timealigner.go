@@ -21,9 +21,9 @@ var TimeAligner = &timeAligner{}
 
 // GetSteamTime will returned the synchronised time, calling
 // `AlignTime` if required
-func (t *timeAligner) GetSteamTime() time.Time {
+func (t *timeAligner) GetSteamTime(proxyUrl string) time.Time {
 	if !t.aligned {
-		t.AlignTime()
+		t.AlignTime(proxyUrl)
 	}
 
 	return time.Now().Add(t.timeDifference)
@@ -31,10 +31,10 @@ func (t *timeAligner) GetSteamTime() time.Time {
 
 // AlignTime will get the current time from steam and store
 // the offset internally for use later
-func (t *timeAligner) AlignTime() {
+func (t *timeAligner) AlignTime(proxyUrl string) {
 	log("Synchronising time")
 	tsr := timeSyncResponse{}
-	_, err := SteamWeb().
+	_, err := SteamWeb(proxyUrl).
 		Get(APIEndpoints.TwoFactorTimeQuery.String()).
 		SetParams(url.Values{"steamid": []string{"0"}}).
 		HandleJSON(&tsr).

@@ -73,7 +73,7 @@ func (s *SteamGuardAccount) Load(r io.Reader) error {
 }
 
 // DeactivateAuthenticator will disable steamguard for this authenticator
-func (s *SteamGuardAccount) DeactivateAuthenticator() bool {
+func (s *SteamGuardAccount) DeactivateAuthenticator(proxyUrl string) bool {
 	postData := url.Values{
 		"steamid":           []string{s.Session.SteamID.String()},
 		"steamguard_scheme": []string{"2"},
@@ -83,7 +83,7 @@ func (s *SteamGuardAccount) DeactivateAuthenticator() bool {
 
 	log("Requestiong to remove this authenticator")
 	removeResponse := RemoveAuthenticatorResponse{}
-	_, err := SteamWeb().
+	_, err := SteamWeb(proxyUrl).
 		SetParams(postData).
 		Post(APIEndpoints.SteamAPIBase.String() + "/ITwoFactorService/RemoveAuthenticator/v0001").
 		HandleJSON(&removeResponse).
@@ -98,8 +98,8 @@ func (s *SteamGuardAccount) DeactivateAuthenticator() bool {
 }
 
 // GenerateSteamGuardCode for the this account at this time
-func (s *SteamGuardAccount) GenerateSteamGuardCode() string {
-	return s.GenerateSteamGuardCodeForTime(TimeAligner.GetSteamTime())
+func (s *SteamGuardAccount) GenerateSteamGuardCode(proxyUrl string) string {
+	return s.GenerateSteamGuardCodeForTime(TimeAligner.GetSteamTime(proxyUrl))
 }
 
 // GenerateSteamGuardCodeForTime for the given time
@@ -135,12 +135,12 @@ func (s *SteamGuardAccount) GenerateSteamGuardCodeForTime(atTime time.Time) stri
 	return string(codeBytes)
 }
 
-func (s *SteamGuardAccount) FetchConfirmations() []*Confirmation {
-	urlStr := s.generateConfirmationURL("conf")
+func (s *SteamGuardAccount) FetchConfirmations(proxyUrl string) []*Confirmation {
+	urlStr := s.generateConfirmationURL("conf", proxyUrl)
 	cookieJar, _ := cookiejar.New(&cookiejar.Options{})
 	s.Session.SetCookies(cookieJar)
 
-	resp, _ := SteamWeb().
+	resp, _ := SteamWeb(proxyUrl).
 		SetJar(cookieJar).
 		Get(urlStr).
 		Do()
@@ -170,17 +170,17 @@ func (s *SteamGuardAccount) FetchConfirmations() []*Confirmation {
 	return ret
 }
 
-func (s *SteamGuardAccount) AcceptConfirmation(conf *Confirmation) bool {
-	return s.sendConfirmationAjax(conf, "allow")
+func (s *SteamGuardAccount) AcceptConfirmation(conf *Confirmation, proxyUrl string) bool {
+	return s.sendConfirmationAjax(conf, "allow", proxyUrl)
 }
 
-func (s *SteamGuardAccount) RejectConfirmation(conf *Confirmation) bool {
-	return s.sendConfirmationAjax(conf, "cancel")
+func (s *SteamGuardAccount) RejectConfirmation(conf *Confirmation, proxyUrl string) bool {
+	return s.sendConfirmationAjax(conf, "cancel", proxyUrl)
 }
 
-func (s *SteamGuardAccount) sendConfirmationAjax(conf *Confirmation, op string) bool {
+func (s *SteamGuardAccount) sendConfirmationAjax(conf *Confirmation, op string, proxyUrl string) bool {
 	urlStr := APIEndpoints.CommunityBase.String() + "/mobileconf/ajaxop"
-	query := s.generateConfirmationQueryParams(op)
+	query := s.generateConfirmationQueryParams(op, proxyUrl)
 	query.Set("op", op)
 	query.Set("cid", conf.ConfirmationID)
 	query.Set("ck", conf.ConfirmationKey)
@@ -190,7 +190,7 @@ func (s *SteamGuardAccount) sendConfirmationAjax(conf *Confirmation, op string) 
 	s.Session.SetCookies(cookieJar)
 
 	logf("requesting to %s confirmation ajax for %s", op, conf.ConfirmationID)
-	_, err := SteamWeb().
+	_, err := SteamWeb(proxyUrl).
 		SetJar(cookieJar).
 		SetParams(query).
 		Get(urlStr).
@@ -205,14 +205,14 @@ func (s *SteamGuardAccount) sendConfirmationAjax(conf *Confirmation, op string) 
 	return confResponse.Success
 }
 
-func (s *SteamGuardAccount) generateConfirmationURL(tag string) string {
+func (s *SteamGuardAccount) generateConfirmationURL(tag string, proxyUrl string) string {
 	endpoint := APIEndpoints.CommunityBase.String() + "/mobileconf/conf?"
-	query := s.generateConfirmationQueryParams(tag)
+	query := s.generateConfirmationQueryParams(tag, proxyUrl)
 	return endpoint + query.Encode()
 }
 
-func (s *SteamGuardAccount) generateConfirmationQueryParams(tag string) url.Values {
-	atTime := TimeAligner.GetSteamTime()
+func (s *SteamGuardAccount) generateConfirmationQueryParams(tag string, proxyUrl string) url.Values {
+	atTime := TimeAligner.GetSteamTime(proxyUrl)
 	return url.Values{
 		"p":   []string{s.DeviceID},
 		"a":   []string{s.Session.SteamID.String()},

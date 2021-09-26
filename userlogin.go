@@ -44,17 +44,20 @@ type UserLogin struct {
 	Session  *SessionData
 	LoggedIn bool
 
-	cookieJar *cookiejar.Jar
+	CookieJar *cookiejar.Jar
+	proxyUrl  string
 }
 
 // NewUserLogin allocates and returns a new UserLogin.
-func NewUserLogin(username, password string) *UserLogin {
+func NewUserLogin(username, password, proxyUrl string) *UserLogin {
 	cookieJar, _ := cookiejar.New(&cookiejar.Options{})
 	return &UserLogin{
-		cookieJar: cookieJar,
+		CookieJar: cookieJar,
 		Session:   &SessionData{},
 		Username:  username,
-		Password:  password}
+		Password:  password,
+		proxyUrl:  proxyUrl,
+	}
 }
 
 // DoLogin actually attempt to login.
@@ -64,13 +67,13 @@ func NewUserLogin(username, password string) *UserLogin {
 // Attempts to authenticate.
 func (u *UserLogin) DoLogin() (LoginResult, error) {
 	postData := url.Values{}
-	cookieJar := u.cookieJar
+	cookieJar := u.CookieJar
 
 	if len(cookieJar.Cookies(APIEndpoints.CommunityBase)) == 0 {
 		log("Creating new 'empty' sesson")
 		u.Session.SetCookies(cookieJar)
 
-		SteamWeb().
+		SteamWeb(u.proxyUrl).
 			SetJar(cookieJar).
 			AddHeader("X-Requested-With", "com.valvesoftware.android.steam.community").
 			Get(APIEndpoints.CommunityBase.String() + "/login?oauth_client_id=DE45CD61&oauth_scope=read_profile%20write_profile%20read_client%20write_client").
@@ -81,7 +84,7 @@ func (u *UserLogin) DoLogin() (LoginResult, error) {
 
 	postData.Set("username", u.Username)
 	rsaResponse := rsaResponse{}
-	_, err := SteamWeb().
+	_, err := SteamWeb(u.proxyUrl).
 		SetJar(cookieJar).
 		SetParams(postData).
 		Post(APIEndpoints.CommunityBase.String() + "/login/getrsakey").
@@ -116,7 +119,7 @@ func (u *UserLogin) DoLogin() (LoginResult, error) {
 
 	logf("Attempting to authenticate as %s", u.Username)
 	loginResponse := LoginResponse{}
-	_, err = SteamWeb().
+	_, err = SteamWeb(u.proxyUrl).
 		SetJar(cookieJar).
 		SetParams(postData).
 		Post(APIEndpoints.CommunityBase.String() + "/login/dologin").
